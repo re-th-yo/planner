@@ -124,6 +124,7 @@ html,body{height:100%;background:#111110;color:#f0ede8;overflow:hidden;}
 .color-swatch.sel{border-color:#fff;box-shadow:0 0 0 1px rgba(255,255,255,.4);}
 
 #stats-section{border-top:1px solid #2a2a28;background:#111110;}
+#mob-stats-row{display:none;}
 #stats-daily,#stats-week{display:flex;align-items:stretch;border-bottom:1px solid #1e1e1c;overflow:hidden;}
 #stats-week{border-bottom:none;}
 .stats-day-col{flex:1;border-right:1px solid #1e1e1c;padding:10px 6px;min-height:60px;min-width:0;}
@@ -137,6 +138,47 @@ html,body{height:100%;background:#111110;color:#f0ede8;overflow:hidden;}
 .stat-icon img{width:100%;height:100%;object-fit:contain;opacity:.65;}
 .stat-val{font-size:10px;font-weight:800;color:var(--accent);font-family:'Barlow',sans-serif;letter-spacing:.03em;opacity:.65;}
 .stat-dot{width:6px;height:6px;border-radius:50%;background:var(--accent);opacity:.5;flex-shrink:0;}
+
+@media (max-width:768px){
+  /* Curseur natif sur mobile */
+  *{cursor:auto!important;}
+  #cursor{display:none!important;}
+
+  /* Header compact */
+  #header{padding:8px 12px;flex-wrap:wrap;gap:6px;}
+  #week-label{font-size:10px;order:1;flex:1;}
+  #week-nav{gap:4px;order:2;flex-wrap:wrap;justify-content:flex-end;}
+  #week-nav button{padding:4px 8px;font-size:10px;}
+  #undo-btn,#redo-btn,#settings-btn,#reset-btn{display:none;}
+  #mobile-day-nav{display:flex!important;align-items:center;gap:0;width:100%;order:3;padding:4px 0;}
+  #mobile-days-header{display:flex;}
+
+  /* Grille 3 jours sur mobile */
+  #time-col{width:40px;}
+  .day-col{display:none!important;min-width:0!important;}
+  .day-col.mobile-active{display:block!important;flex:1!important;min-width:0!important;}
+  #days-grid{display:flex!important;width:100%!important;}
+
+  /* Blocs plus épais pour le tactile */
+  .event-block{left:2px;right:2px;border-radius:6px;}
+  .resize-handle{height:14px!important;opacity:1!important;background:rgba(0,0,0,.2)!important;}
+
+  /* Header jours: masqué car dans mobile-day-nav */
+  #days-header{display:none!important;}
+
+  /* Stats inline dans chaque colonne sur mobile */
+  #stats-section{display:none!important;}
+  #mob-stats-row{display:flex!important;}
+  .mobile-col-stats{display:block!important;}
+  .mobile-col-stats .stat-item{margin-bottom:3px;}
+
+  /* Modales plein écran */
+  #modal,#settings-modal{width:100%!important;max-width:100%!important;border-radius:12px 12px 0 0;position:fixed;bottom:0;left:0;right:0;margin:0;}
+  #modal-bg,#settings-modal-bg{align-items:flex-end!important;}
+
+  /* Time-col sync avec scroll */
+  .time-label span{font-size:9px!important;}
+}
 </style>
 </head>
 <body>
@@ -156,6 +198,11 @@ html,body{height:100%;background:#111110;color:#f0ede8;overflow:hidden;}
       <button id="settings-btn">⚙ Paramètres</button>
       <button id="reset-btn">Reset</button>
     </div>
+    <div id="mobile-day-nav" style="display:none;">
+      <button id="mob-prev" style="background:none;border:1px solid #2e2e2c;border-radius:6px;padding:6px 10px;font-size:14px;color:#9a9690;font-family:Barlow,sans-serif;font-weight:800;flex-shrink:0;">←</button>
+      <div id="mobile-days-header" style="flex:1;display:flex;"></div>
+      <button id="mob-next" style="background:none;border:1px solid #2e2e2c;border-radius:6px;padding:6px 10px;font-size:14px;color:#9a9690;font-family:Barlow,sans-serif;font-weight:800;flex-shrink:0;">→</button>
+    </div>
   </div>
   <div id="grid-wrap">
     <div id="time-col"><div id="time-inner"></div></div>
@@ -163,6 +210,7 @@ html,body{height:100%;background:#111110;color:#f0ede8;overflow:hidden;}
       <div id="days-header"></div>
       <div id="days-scroll">
         <div id="days-grid"></div>
+        <div id="mob-stats-row" style="display:none;border-top:1px solid #2a2a28;"></div>
         <div id="stats-section">
           <div id="stats-daily"></div>
           <div id="stats-week"></div>
@@ -300,6 +348,8 @@ function setAccent(hex){
 
 
 
+const isMobile=()=>window.innerWidth<=768;
+let mobileDayIdx=0;
 let evs=[],wOff=0,editId=null,pendSlot=null,selIcon='none';
 let drag={on:false},rsz={on:false},create={on:false};
 
@@ -853,7 +903,7 @@ function renderStats(){
 
 }
 
-function render(){renderLabel();renderHeader();renderTimes();renderGrid();renderStats();}
+function render(){renderLabel();renderHeader();renderTimes();renderGrid();renderStats();if(isMobile())updateMobileDay();}
 
 document.getElementById('prev-btn').onclick=()=>{wOff--;render();};
 document.getElementById('next-btn').onclick=()=>{wOff++;render();};
@@ -972,6 +1022,199 @@ document.addEventListener('mouseover',e=>{
   const onEvent=e.target.closest('.event-block');
   if(!drag.on&&!rsz.on) setCursor(onEvent?'event':'default');
 });
+
+
+// ── Mobile / Touch ──
+
+function updateMobileDay(){
+  if(!isMobile())return;
+  const dates=gwd(wOff);
+  const today=new Date();
+
+  // Afficher 3 colonnes day-col
+  const cols=document.querySelectorAll('.day-col');
+  cols.forEach((col,i)=>{
+    col.classList.toggle('mobile-active',i>=mobileDayIdx&&i<mobileDayIdx+3);
+  });
+
+  // Reconstruire mob-stats-row directement
+  const mobRow=document.getElementById('mob-stats-row');
+  if(mobRow){
+    mobRow.innerHTML='';
+    mobRow.style.display='flex';
+    // Une colonne par jour visible
+    for(let i=mobileDayIdx;i<mobileDayIdx+3&&i<7;i++){
+      const d=dates[i];
+      const colStats={};
+      evs.filter(ev=>ev.date===ds(d)).forEach(ev=>{
+        const icon=ev.icon||'none';
+        const dur=t2m(ev.end)-t2m(ev.start);
+        if(dur>0)colStats[icon]=(colStats[icon]||0)+dur;
+      });
+      const sorted=Object.entries(colStats).sort((a,b)=>b[1]-a[1]);
+      const statEl=document.createElement('div');
+      statEl.style.cssText='flex:1;border-right:1px solid #1e1e1c;padding:8px 4px;min-height:40px;';
+      if(i===mobileDayIdx+2||i===6)statEl.style.borderRight='none';
+      if(sorted.length===0){
+        const em=document.createElement('div');
+        em.style.cssText='font-size:9px;color:#2a2a28;font-family:Barlow,sans-serif;font-weight:700;';
+        em.textContent='—';statEl.appendChild(em);
+      } else {
+        sorted.forEach(([icon,mins])=>{
+          const h=Math.floor(mins/60),m=mins%60;
+          const t=h>0?(m>0?h+'h'+String(m).padStart(2,'0'):h+'h'):(m+'min');
+          const row=document.createElement('div');row.className='stat-item';
+          const iw=document.createElement('div');iw.className='stat-icon';
+          if(icon==='none'){const dot=document.createElement('div');dot.className='stat-dot';iw.appendChild(dot);}
+          else if(GIF_KEYS.includes(icon)){const img=document.createElement('img');img.src=GIF_ICONS[icon]||'';iw.appendChild(img);}
+          else{iw.innerHTML=ICONS[icon]||'';const s=iw.querySelector('svg');if(s){s.style.width='100%';s.style.height='100%';}}
+          const val=document.createElement('span');val.className='stat-val';val.textContent=t;
+          row.appendChild(iw);row.appendChild(val);statEl.appendChild(row);
+        });
+      }
+      mobRow.appendChild(statEl);
+    }
+  }
+  // Header 3 jours dans mobile-day-nav
+  const mhdr=document.getElementById('mobile-days-header');
+  if(mhdr){
+    mhdr.innerHTML='';
+    const today=new Date();
+    for(let i=mobileDayIdx;i<mobileDayIdx+3&&i<7;i++){
+      const d=dates[i];
+      const isToday=sameDay(d,today);
+      const col=document.createElement('div');
+      col.style.cssText='flex:1;text-align:center;padding:4px 2px;';
+      col.innerHTML=`<div style="font-size:9px;font-weight:800;color:${isToday?'var(--accent)':'#4e4d4a'};text-transform:uppercase;letter-spacing:.1em;font-family:Barlow,sans-serif;">${DFR[i]}</div>` +
+        (isToday
+          ? `<div style="font-size:16px;font-weight:800;background:var(--accent);color:#111110;border-radius:50%;width:26px;height:26px;display:flex;align-items:center;justify-content:center;margin:2px auto 0;font-family:Barlow,sans-serif;">${d.getDate()}</div>`
+          : `<div style="font-size:16px;font-weight:800;color:#f0ede8;font-family:Barlow,sans-serif;">${d.getDate()}</div>`);
+      mhdr.appendChild(col);
+    }
+  }
+}
+
+// Boutons jour mobile
+document.getElementById('mob-prev').onclick=()=>{
+  mobileDayIdx=Math.max(0,mobileDayIdx-1);updateMobileDay();
+};
+document.getElementById('mob-next').onclick=()=>{
+  mobileDayIdx=Math.min(4,mobileDayIdx+1);updateMobileDay();
+};
+
+// Swipe horizontal pour changer de jour
+let touchStartX=0,touchStartY=0,touchStartTime=0;
+document.getElementById('days-scroll').addEventListener('touchstart',e=>{
+  touchStartX=e.touches[0].clientX;
+  touchStartY=e.touches[0].clientY;
+  touchStartTime=Date.now();
+},{passive:true});
+document.getElementById('days-scroll').addEventListener('touchend',e=>{
+  if(!isMobile())return;
+  const dx=e.changedTouches[0].clientX-touchStartX;
+  const dy=e.changedTouches[0].clientY-touchStartY;
+  const dt=Date.now()-touchStartTime;
+  // Swipe horizontal rapide (pas un scroll vertical)
+  if(Math.abs(dx)>50&&Math.abs(dx)>Math.abs(dy)*2&&dt<400){
+    mobileDayIdx=dx<0?Math.min(4,mobileDayIdx+1):Math.max(0,mobileDayIdx-1);
+    updateMobileDay();
+  }
+},{passive:true});
+
+// ── Touch pour créer un event (tap + drag vertical) ──
+let touchCreate={on:false};
+document.getElementById('days-grid').addEventListener('touchstart',e=>{
+  if(!isMobile())return;
+  const touch=e.touches[0];
+  const el=document.elementFromPoint(touch.clientX,touch.clientY);
+  const slot=el?.closest('.hour-slot');
+  if(!slot)return;
+  const col=slot.closest('.day-col');
+  const colR=col.getBoundingClientRect();
+  const scrollTop=document.getElementById('days-scroll').scrollTop;
+  const rawMin=(touch.clientY-colR.top+scrollTop)/HH*60;
+  const startMin=Math.max(0,Math.min(23*60,Math.round(rawMin/60)*60));
+  const day=gwd(wOff)[mobileDayIdx];
+  create={on:true,col,di:mobileDayIdx,day,startMin,endMin:startMin+60,ghost:null};
+  document.body.style.userSelect='none';
+  const ghost=document.createElement('div');
+  ghost.id='create-ghost';
+  const rgb=hexToRgb(accentColor);
+  ghost.style.cssText=`position:absolute;left:3px;right:3px;border-radius:5px;background:rgba(${rgb},.15);border:1.5px solid rgba(${rgb},.5);pointer-events:none;z-index:20;transition:none;`;
+  ghost.style.top=(startMin/60*HH)+'px';
+  ghost.style.height=HH+'px';
+  col.appendChild(ghost);
+  create.ghost=ghost;
+},{passive:true});
+
+document.getElementById('days-grid').addEventListener('touchmove',e=>{
+  if(!create.on)return;
+  e.preventDefault();
+  const touch=e.touches[0];
+  const r=create.col.getBoundingClientRect();
+  const relY=touch.clientY-r.top;
+  let endMin=Math.round(relY/HH)*60;
+  endMin=Math.max(create.startMin+60,Math.min(24*60,endMin));
+  create.endMin=endMin;
+  const topPx=(create.startMin/60)*HH;
+  const h=Math.max(HH,(endMin-create.startMin)/60*HH);
+  if(create.ghost){create.ghost.style.top=topPx+'px';create.ghost.style.height=h+'px';}
+},{passive:false});
+
+document.getElementById('days-grid').addEventListener('touchend',e=>{
+  if(!create.on)return;
+  if(create.ghost)create.ghost.remove();
+  const startMin=create.startMin,endMin=create.endMin,day=create.day;
+  create={on:false};
+  document.body.style.userSelect='';
+  editId=null;pendSlot={date:ds(day),hour:Math.floor(startMin/60)};
+  document.getElementById('ev-name').value='';
+  document.getElementById('ev-start').value=m2t(startMin);
+  document.getElementById('ev-end').value=m2t(endMin);
+  document.getElementById('ev-note').value='';
+  selIcon='none';renderIconGrid();
+  document.getElementById('modal-title').textContent='Nouvelle tâche';
+  document.getElementById('btn-del').style.display='none';
+  document.getElementById('modal-bg').style.display='flex';
+  setTimeout(()=>document.getElementById('ev-name').focus(),50);
+});
+
+// ── Touch sur bloc event: tap = ouvrir modal ──
+document.getElementById('days-grid').addEventListener('touchstart',e=>{
+  if(!isMobile())return;
+  const block=e.target.closest('.event-block');
+  if(!block)return;
+  e.stopPropagation();
+  // Tap court = ouvrir
+  const t0=Date.now();
+  const onEnd=()=>{
+    if(Date.now()-t0<300){
+      const ev=evs.find(v=>v.id===block.dataset.id);
+      if(ev)openModal(ev);
+    }
+    block.removeEventListener('touchend',onEnd);
+  };
+  block.addEventListener('touchend',onEnd);
+},{passive:true});
+
+// Re-render mobile au resize
+window.addEventListener('resize',()=>{
+  if(isMobile()){
+    updateMobileDay();
+  } else {
+    document.querySelectorAll('.day-col').forEach(col=>col.classList.remove('mobile-active'));
+    const mobRow=document.getElementById('mob-stats-row');
+    if(mobRow)mobRow.style.display='none';
+  }
+});
+
+// Init mobile au chargement
+if(isMobile()){
+  // Choisir le jour courant par défaut
+  const todayDow=(new Date().getDay()+6)%7;
+  mobileDayIdx=Math.min(4,todayDow);
+  updateMobileDay();
+}
 
 </script>
 </body>
